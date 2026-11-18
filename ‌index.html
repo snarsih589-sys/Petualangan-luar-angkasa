@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SPACE MISSION – PETUALANGAN LUAR ANGKASA</title>
+    
+    <!-- Tailwind CSS for UI styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- MediaPipe Libraries for Hand Tracking -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        /* Custom styles for animations and fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Nunito:wght@400;700&display=swap');
+        
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #050510;
+            overflow: hidden; /* Prevent scrolling */
+            touch-action: none;
+        }
+
+        h1, h2, h3, .orbitron {
+            font-family: 'Orbitron', sans-serif;
+        }
+
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Twinkling stars background effect for menus */
+        .stars {
+            background: black url('https://www.transparenttextures.com/patterns/stardust.png') repeat;
+            animation: twinkling 100s linear infinite;
+        }
+
+        @keyframes twinkling {
+            from { background-position: 0 0; }
+            to { background-position: -10000px 5000px; }
+        }
+
+        /* Glassmorphism panel */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .btn-glow {
+            transition: all 0.3s ease;
+        }
+        .btn-glow:hover {
+            box-shadow: 0 0 15px 5px rgba(59, 130, 246, 0.6);
+            transform: translateY(-2px);
+        }
+
+        /* Heart animation */
+        @keyframes heartbeat {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+        .heart {
+            animation: heartbeat 1.5s infinite;
+            color: #ef4444;
+            font-size: 1.5rem;
+            text-shadow: 0 0 5px rgba(239, 68, 68, 0.8);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen relative text-white">
+
+    <!-- Game Canvas -->
+    <canvas id="gameCanvas" class="absolute top-0 left-0 z-0"></canvas>
+
+    <!-- Start Screen -->
+    <div id="startScreen" class="absolute inset-0 z-50 flex items-center justify-center stars">
+        <div class="glass-panel p-8 md:p-12 rounded-2xl max-w-xl w-[90%] text-center border-t-4 border-blue-500 flex flex-col items-center">
+            <div class="w-24 h-24 mb-4 rounded-full bg-blue-900 flex items-center justify-center border-4 border-blue-400 shadow-[0_0_20px_rgba(96,165,250,0.8)]">
+                <svg class="w-12 h-12 text-blue-200" fill="currentColor" viewBox="0 0 24 24"><path d="M12 2L2 22l10-3 10 3L12 2zm0 4.5l6.5 13-6.5-2-6.5 2L12 6.5z"/></svg>
+            </div>
+            <h1 class="text-3xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-500 mb-2 orbitron">SPACE MISSION</h1>
+            <h2 class="text-xl md:text-2xl font-bold text-blue-200 mb-8 orbitron">PETUALANGAN LUAR ANGKASA</h2>
+            
+            <p class="text-gray-300 mb-6 text-sm md:text-base">Gunakan tanganmu di depan kamera atau mouse untuk menggerakkan pesawat. Selamatkan galaksi dengan menjawab pertanyaan Pendidikan Pancasila!</p>
+            
+            <div class="w-full max-w-sm mb-8 relative">
+                <input type="text" id="playerNameInput" placeholder="Masukkan Nama Siswa" class="w-full px-4 py-3 rounded-lg bg-gray-800 border-2 border-blue-500/50 text-white placeholder-gray-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/50 text-center text-lg transition-all">
+            </div>
+
+            <button id="startBtn" class="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-4 rounded-full text-xl font-bold uppercase tracking-wider btn-glow flex items-center gap-2">
+                <span>Mulai Misi</span>
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+            </button>
+            <div id="loadingCameraText" class="mt-4 text-blue-300 text-sm hidden animate-pulse">Mengaktifkan Sensor Kamera...</div>
+        </div>
+    </div>
+
+    <!-- Game HUD (Heads Up Display) -->
+    <div id="hud" class="absolute inset-0 z-40 hidden pointer-events-none flex-col">
+        <!-- Top Bar -->
+        <div class="flex justify-between items-center p-3 md:p-5 bg-gradient-to-b from-black/80 to-transparent">
+            <div class="glass-panel px-4 py-2 rounded-lg">
+                <span class="text-gray-300 text-sm md:text-base block">Misi</span>
+                <span class="orbitron text-xl md:text-2xl font-bold text-blue-400" id="missionDisplay">1/5</span>
+            </div>
+            
+            <div class="glass-panel px-6 py-2 rounded-lg text-center">
+                <span class="text-gray-300 text-sm md:text-base block">Skor</span>
+                <span class="orbitron text-2xl md:text-3xl font-bold text-yellow-400" id="scoreDisplay">0</span>
+            </div>
+
+            <div class="glass-panel px-4 py-2 rounded-lg text-center min-w-[100px]">
+                <span class="text-gray-300 text-sm md:text-base block">Nyawa</span>
+                <div class="flex justify-center gap-1 mt-1" id="livesDisplay">
+                    <!-- Hearts added via JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Question Panel -->
+        <div class="w-full flex justify-center mt-2 px-4">
+            <div class="glass-panel max-w-3xl w-full p-4 md:p-6 rounded-xl border-t-2 border-blue-400 text-center shadow-lg">
+                <p id="questionText" class="text-lg md:text-2xl font-bold leading-tight">Pertanyaan akan muncul di sini?</p>
+            </div>
+        </div>
+
+        <!-- Feedback Message (Correct/Wrong) -->
+        <div id="feedbackMessage" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-4xl md:text-6xl font-black orbitron opacity-0 transition-opacity duration-300">
+            BENAR!
+        </div>
+    </div>
+
+    <!-- Webcam PiP (Picture-in-Picture) -->
+    <div id="webcamContainer" class="absolute bottom-4 right-4 md:bottom-8 md:right-8 w-32 h-24 md:w-48 md:h-36 glass-panel rounded-xl overflow-hidden border-2 border-blue-500 z-40 hidden shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+        <!-- transform scaleX(-1) mirrors the video horizontally -->
+        <video id="webcamVideo" class="w-full h-full object-cover" style="transform: scaleX(-1);" autoplay playsinline></video>
+        <div class="absolute bottom-1 right-1 flex items-center gap-1 bg-black/60 px-2 py-1 rounded text-[10px]">
+            <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+            Sensor Aktif
+        </div>
+    </div>
+
+    <!-- Game Over / Win Screen -->
+    <div id="endScreen" class="absolute inset-0 z-50 hidden flex items-center justify-center bg-black/90 backdrop-blur-md">
+        <div class="glass-panel p-8 md:p-12 rounded-2xl max-w-xl w-[90%] text-center flex flex-col items-center">
+            <h1 id="endTitle" class="text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-500 mb-4 orbitron">MISI GAGAL</h1>
+            <p id="endMessage" class="text-xl md:text-2xl text-gray-200 mb-6 font-bold">Coba lagi, pejuang!</p>
+            
+            <div class="bg-gray-800/80 rounded-xl p-6 w-full mb-8 border border-gray-700">
+                <p class="text-gray-400 mb-1">Skor Akhir</p>
+                <p id="endScore" class="orbitron text-5xl text-yellow-400 font-black">0</p>
+            </div>
+
+            <button id="restartBtn" class="bg-gradient-to-r from-green-500 to-emerald-600 px-8 py-4 rounded-full text-xl font-bold uppercase tracking-wider btn-glow text-white shadow-lg">
+                Mulai Ulang
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA SOAL ---
+        const questionsData = [
+            // Mission 1: Bintang (Sila 1)
+            { q: "Apa warna latar belakang pada lambang bintang di perisai Garuda?", options: ["Hitam", "Merah", "Putih"], correct: "Hitam" },
+            { q: "Saat teman sedang beribadah, apa yang harus kita lakukan?", options: ["Menunggu tenang", "Mengajak main", "Mengganggunya"], correct: "Menunggu tenang" },
+            { q: "Mengapa simbol sila pertama berbentuk bintang bersudut lima?", options: ["Cahaya kerohanian", "Bintang di langit", "Indah dilihat"], correct: "Cahaya kerohanian" },
+            
+            // Mission 2: Rantai (Sila 2)
+            { q: "Lambang sila kedua Pancasila adalah...", options: ["Rantai emas", "Pohon beringin", "Padi dan kapas"], correct: "Rantai emas" },
+            { q: "Budi melihat adik terjatuh lalu membantunya. Sikap Budi sesuai lambang...", options: ["Rantai", "Kepala Banteng", "Bintang"], correct: "Rantai" },
+            { q: "Makna gelang persegi dan lingkaran pada rantai adalah...", options: ["Laki & perempuan bersatu", "Rantai sangat kuat", "Hiasan yang bagus"], correct: "Laki & perempuan bersatu" },
+            
+            // Mission 3: Pohon Beringin (Sila 3)
+            { q: "Pohon beringin adalah lambang Pancasila sila ke...", options: ["Tiga", "Empat", "Lima"], correct: "Tiga" },
+            { q: "Bermain bersama tanpa membeda-bedakan suku sesuai dengan lambang...", options: ["Pohon Beringin", "Bintang", "Padi"], correct: "Pohon Beringin" },
+            { q: "Akar gantung pada pohon beringin melambangkan...", options: ["Keberagaman suku bangsa", "Banyaknya daun pohon", "Pohon tua"], correct: "Keberagaman suku bangsa" },
+            
+            // Mission 4: Kepala Banteng (Sila 4)
+            { q: "Apa warna dasar pada perisai lambang Kepala Banteng?", options: ["Merah", "Hitam", "Putih"], correct: "Merah" },
+            { q: "Bermusyawarah memilih ketua kelas adalah pengamalan lambang...", options: ["Kepala Banteng", "Rantai", "Bintang"], correct: "Kepala Banteng" },
+            { q: "Mengapa banteng dipilih sebagai lambang sila keempat?", options: ["Hewan sosial suka kumpul", "Hewan yang kuat", "Hewan langka"], correct: "Hewan sosial suka kumpul" },
+            
+            // Mission 5: Padi dan Kapas (Sila 5)
+            { q: "Lambang sila kelima adalah...", options: ["Padi dan Kapas", "Bintang", "Rantai"], correct: "Padi dan Kapas" },
+            { q: "Membagi kue secara adil kepada teman-teman merupakan penerapan lambang...", options: ["Padi dan Kapas", "Kepala Banteng", "Pohon Beringin"], correct: "Padi dan Kapas" },
+            { q: "Apa makna Padi dan Kapas bagi bangsa Indonesia?", options: ["Kebutuhan pangan sandang", "Makanan hewan ternak", "Tanaman hias"], correct: "Kebutuhan pangan sandang" }
+        ];
+
+        // --- GAME STATE ---
+        const gameState = {
+            isRunning: false,
+            playerName: "",
+            score: 0,
+            lives: 3,
+            currentQuestionIndex: 0,
+            mission: 1,
+            targetX: 0, // Input target for smooth movement
+            asteroids: [],
+            stars: [],
+            particles: [],
+            spawnTimer: 0,
+            currentQuestionData: null
+        };
+
+        // --- DOM ELEMENTS ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const uiElements = {
+            startScreen: document.getElementById('startScreen'),
+            nameInput: document.getElementById('playerNameInput'),
+            startBtn: document.getElementById('startBtn'),
+            loadingText: document.getElementById('loadingCameraText'),
+            hud: document.getElementById('hud'),
+            missionDisplay: document.getElementById('missionDisplay'),
+            scoreDisplay: document.getElementById('scoreDisplay'),
+            livesDisplay: document.getElementById('livesDisplay'),
+            questionText: document.getElementById('questionText'),
+            webcamContainer: document.getElementById('webcamContainer'),
+            endScreen: document.getElementById('endScreen'),
+            endTitle: document.getElementById('endTitle'),
+            endMessage: document.getElementById('endMessage'),
+            endScore: document.getElementById('endScore'),
+            restartBtn: document.getElementById('restartBtn'),
+            feedbackMessage: document.getElementById('feedbackMessage'),
+            videoElement: document.getElementById('webcamVideo')
+        };
+
+        // --- RESIZE HANDLING ---
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            if (spaceship) {
+                spaceship.y = canvas.height - 100;
+                // Keep targetX within bounds on resize
+                gameState.targetX = Math.min(Math.max(gameState.targetX, 0), canvas.width);
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // --- ENTITIES ---
+        class Spaceship {
+            constructor() {
+                this.width = 60;
+                this.height = 80;
+                this.x = canvas.width / 2;
+                this.y = canvas.height - 120;
+                this.color = '#3b82f6';
+                this.flameOffset = 0;
+            }
+
+            update() {
+                // Smooth movement (lerp) towards targetX
+                this.x += (gameState.targetX - this.x) * 0.15;
+                
+                // Boundaries
+                if (this.x < this.width / 2) this.x = this.width / 2;
+                if (this.x > canvas.width - this.width / 2) this.x = canvas.width - this.width / 2;
+
+                this.flameOffset = (this.flameOffset + 1) % 10;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Flame
+                ctx.beginPath();
+                ctx.moveTo(-15, this.height/2 - 10);
+                ctx.lineTo(0, this.height/2 + 20 + (this.flameOffset > 5 ? 10 : 0));
+                ctx.lineTo(15, this.height/2 - 10);
+                ctx.fillStyle = '#f59e0b';
+                ctx.fill();
+                ctx.closePath();
+
+                // Inner Flame
+                ctx.beginPath();
+                ctx.moveTo(-8, this.height/2 - 10);
+                ctx.lineTo(0, this.height/2 + 10 + (this.flameOffset > 5 ? 5 : 0));
+                ctx.lineTo(8, this.height/2 - 10);
+                ctx.fillStyle = '#fef08a';
+                ctx.fill();
+                ctx.closePath();
+
+                // Ship Body
+                ctx.beginPath();
+                ctx.moveTo(0, -this.height/2); // Nose
+                ctx.lineTo(25, this.height/2 - 10); // Right bottom
+                ctx.lineTo(-25, this.height/2 - 10); // Left bottom
+                ctx.closePath();
+                
+                // Gradient for ship
+                let gradient = ctx.createLinearGradient(0, -this.height/2, 0, this.height/2);
+                gradient.addColorStop(0, '#60a5fa');
+                gradient.addColorStop(1, '#1e3a8a');
+                ctx.fillStyle = gradient;
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#93c5fd';
+                ctx.stroke();
+
+                // Cockpit Window
+                ctx.beginPath();
+                ctx.arc(0, -10, 10, 0, Math.PI * 2);
+                ctx.fillStyle = '#bae6fd';
+                ctx.fill();
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = '#0284c7';
+                ctx.stroke();
+
+                // Wings
+                ctx.beginPath();
+                ctx.moveTo(-25, this.height/2 - 10);
+                ctx.lineTo(-40, this.height/2 + 10);
+                ctx.lineTo(-20, this.height/2 - 5);
+                ctx.fillStyle = '#94a3b8';
+                ctx.fill();
+
+                ctx.beginPath();
+                ctx.moveTo(25, this.height/2 - 10);
+                ctx.lineTo(40, this.height/2 + 10);
+                ctx.lineTo(20, this.height/2 - 5);
+                ctx.fillStyle = '#94a3b8';
+                ctx.fill();
+
+                ctx.restore();
+            }
+
+            // Hitbox for collision (Rectangle)
+            getBounds() {
+                return {
+                    x: this.x - this.width / 2,
+                    y: this.y - this.height / 2,
+                    w: this.width,
+                    h: this.height
+                };
+            }
+        }
+
+        class Asteroid {
+            constructor(text, x, isCorrect) {
+                // Determine size based on text length to some extent, but keep it uniform
+                this.width = Math.min(220, canvas.width / 3.5); 
+                this.height = 90;
+                this.x = x;
+                this.y = -100;
+                // Speed increases with mission
+                this.baseSpeed = canvas.height / 350;
+                this.speed = this.baseSpeed + (gameState.mission * 0.4); 
+                this.text = text;
+                this.isCorrect = isCorrect;
+                this.active = true;
+                
+                // Visual variation
+                this.rotation = 0;
+                this.rotSpeed = (Math.random() - 0.5) * 0.02;
+                this.points = [];
+                const numPoints = 8;
+                for(let i=0; i<numPoints; i++) {
+                    const angle = (i/numPoints) * Math.PI * 2;
+                    const r = 0.8 + Math.random() * 0.2; // slight jaggedness
+                    this.points.push({x: Math.cos(angle)*r, y: Math.sin(angle)*r});
+                }
+            }
+
+            update() {
+                this.y += this.speed;
+                this.rotation += this.rotSpeed;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                
+                // Draw asteroid shape (Crystal/Meteor style)
+                ctx.beginPath();
+                const halfW = this.width / 2;
+                const halfH = this.height / 2;
+                
+                // Draw a rounded, slightly jagged tech-capsule
+                ctx.roundRect(-halfW, -halfH, this.width, this.height, 15);
+                
+                ctx.fillStyle = 'rgba(30, 41, 59, 0.9)'; // Dark slate
+                ctx.fill();
+                ctx.lineWidth = 3;
+                ctx.strokeStyle = '#64748b'; // Slate
+                ctx.stroke();
+
+                // Inner glow / highlight
+                ctx.beginPath();
+                ctx.roundRect(-halfW + 4, -halfH + 4, this.width - 8, this.height - 8, 10);
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+                ctx.stroke();
+
+                // Draw Text
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 16px Nunito, sans-serif';
+                if(canvas.width < 600) ctx.font = 'bold 12px Nunito, sans-serif';
+                
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                this.wrapText(ctx, this.text, 0, 0, this.width - 20, 20);
+
+                ctx.restore();
+            }
+
+            wrapText(context, text, x, y, maxWidth, lineHeight) {
+                const words = text.split(' ');
+                let line = '';
+                const lines = [];
+                for(let n = 0; n < words.length; n++) {
+                    const testLine = line + words[n] + ' ';
+                    const metrics = context.measureText(testLine);
+                    const testWidth = metrics.width;
+                    if (testWidth > maxWidth && n > 0) {
+                        lines.push(line);
+                        line = words[n] + ' ';
+                    } else {
+                        line = testLine;
+                    }
+                }
+                lines.push(line);
+                
+                const startY = y - ((lines.length - 1) * lineHeight) / 2;
+                for(let k=0; k<lines.length; k++) {
+                    context.fillText(lines[k].trim(), x, startY + (k * lineHeight));
+                }
+            }
+
+            getBounds() {
+                return {
+                    x: this.x - this.width / 2,
+                    y: this.y - this.height / 2,
+                    w: this.width,
+                    h: this.height
+                };
+            }
+        }
+
+        class Star {
+            constructor() {
+                this.reset();
+                this.y = Math.random() * canvas.height; // initial random distribution
+            }
+            reset() {
+                this.x = Math.random() * canvas.width;
+                this.y = 0;
+                this.size = Math.random() * 2 + 1;
+                this.speed = (Math.random() * 2 + 1) * (1 + gameState.mission * 0.2);
+                this.brightness = Math.random();
+            }
+            update() {
+                this.y += this.speed;
+                if (this.y > canvas.height) {
+                    this.reset();
+                }
+            }
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.brightness})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 10;
+                this.vy = (Math.random() - 0.5) * 10;
+                this.life = 1.0;
+                this.color = color;
+                this.size = Math.random() * 5 + 2;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.life -= 0.02;
+            }
+            draw() {
+                ctx.globalAlpha = Math.max(0, this.life);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI*2);
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
+        }
+
+        let spaceship = new Spaceship();
+        gameState.targetX = canvas.width / 2;
+
+        // Init Stars
+        for(let i=0; i<100; i++) {
+            gameState.stars.push(new Star());
+        }
+
+        // --- HELPER FUNCTIONS ---
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+        }
+
+        function createExplosion(x, y, color) {
+            for(let i=0; i<30; i++) {
+                gameState.particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function showFeedback(isCorrect) {
+            uiElements.feedbackMessage.innerText = isCorrect ? "BENAR! +100" : "SALAH!";
+            uiElements.feedbackMessage.className = `absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-4xl md:text-6xl font-black orbitron transition-opacity duration-300 ${isCorrect ? 'text-green-400 drop-shadow-[0_0_10px_rgba(74,222,128,0.8)]' : 'text-red-500 drop-shadow-[0_0_10px_rgba(239,68,68,0.8)]'}`;
+            uiElements.feedbackMessage.style.opacity = '1';
+            
+            setTimeout(() => {
+                uiElements.feedbackMessage.style.opacity = '0';
+            }, 1500);
+        }
+
+        function updateUI() {
+            uiElements.scoreDisplay.innerText = gameState.score;
+            uiElements.missionDisplay.innerText = `${gameState.mission}/5`;
+            
+            let heartsHTML = '';
+            for(let i=0; i<3; i++) {
+                if (i < gameState.lives) {
+                    heartsHTML += '<span class="heart">❤️</span>';
+                } else {
+                    heartsHTML += '<span class="text-gray-600 grayscale opacity-50">❤️</span>';
+                }
+            }
+            uiElements.livesDisplay.innerHTML = heartsHTML;
+        }
+
+        // --- GAME LOGIC ---
+
+        function loadQuestion() {
+            if (gameState.currentQuestionIndex >= questionsData.length) {
+                winGame();
+                return;
+            }
+
+            // Update Mission based on index
+            gameState.mission = Math.floor(gameState.currentQuestionIndex / 3) + 1;
+            updateUI();
+
+            const qData = questionsData[gameState.currentQuestionIndex];
+            gameState.currentQuestionData = qData;
+            uiElements.questionText.innerText = qData.q;
+
+            spawnAsteroids();
+        }
+
+        function spawnAsteroids() {
+            gameState.asteroids = [];
+            const options = [...gameState.currentQuestionData.options];
+            shuffleArray(options);
+
+            const segmentWidth = canvas.width / 3;
+            for(let i=0; i<3; i++) {
+                // Calculate center of each 1/3rd segment
+                const xPos = (segmentWidth * i) + (segmentWidth / 2);
+                const isCorrect = options[i] === gameState.currentQuestionData.correct;
+                gameState.asteroids.push(new Asteroid(options[i], xPos, isCorrect));
+            }
+        }
+
+        function checkCollisions() {
+            const shipBounds = spaceship.getBounds();
+            
+            for (let i = gameState.asteroids.length - 1; i >= 0; i--) {
+                const ast = gameState.asteroids[i];
+                if (!ast.active) continue;
+
+                const astBounds = ast.getBounds();
+
+                // Simple AABB Collision
+                if (shipBounds.x < astBounds.x + astBounds.w &&
+                    shipBounds.x + shipBounds.w > astBounds.x &&
+                    shipBounds.y < astBounds.y + astBounds.h &&
+                    shipBounds.y + shipBounds.h > astBounds.y) {
+                    
+                    ast.active = false;
+
+                    if (ast.isCorrect) {
+                        // Correct Answer
+                        gameState.score += 100;
+                        createExplosion(ast.x, ast.y, '#4ade80'); // Green particles
+                        showFeedback(true);
+                        gameState.asteroids = []; // Clear remaining
+                        gameState.currentQuestionIndex++;
+                        setTimeout(loadQuestion, 1500); // Wait before next question
+                        updateUI();
+                    } else {
+                        // Wrong Answer
+                        handleWrongAnswer(ast.x, ast.y);
+                    }
+                }
+                // Check if missed correct asteroid (went off screen)
+                else if (ast.y - ast.height > canvas.height) {
+                    ast.active = false;
+                    // If all are inactive and we haven't advanced question, player missed it
+                    if (gameState.asteroids.every(a => !a.active || a.y - a.height > canvas.height)) {
+                        handleWrongAnswer(spaceship.x, canvas.height); // Fake explosion location
+                    }
+                }
+            }
+        }
+
+        function handleWrongAnswer(x, y) {
+            gameState.lives--;
+            createExplosion(x, y, '#ef4444'); // Red particles
+            showFeedback(false);
+            updateUI();
+            
+            if (gameState.lives <= 0) {
+                gameOver();
+            } else {
+                // Restart same question
+                gameState.asteroids = [];
+                setTimeout(spawnAsteroids, 1500);
+            }
+        }
+
+        function gameOver() {
+            gameState.isRunning = false;
+            uiElements.hud.classList.add('hidden');
+            uiElements.endScreen.classList.remove('hidden');
+            uiElements.endTitle.innerText = "MISI GAGAL";
+            uiElements.endTitle.className = "text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 to-pink-500 mb-4 orbitron";
+            uiElements.endMessage.innerText = "Pesawatmu hancur. Jangan menyerah!";
+            uiElements.endScore.innerText = gameState.score;
+            uiElements.webcamContainer.classList.add('hidden');
+        }
+
+        function winGame() {
+            gameState.isRunning = false;
+            uiElements.hud.classList.add('hidden');
+            uiElements.endScreen.classList.remove('hidden');
+            uiElements.endTitle.innerText = "MISI SELESAI!";
+            uiElements.endTitle.className = "text-4xl md:text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-blue-500 mb-4 orbitron";
+            uiElements.endMessage.innerText = `Selamat ${gameState.playerName},\nKamu Berhasil Menyelamatkan Galaksi!`;
+            uiElements.endScore.innerText = gameState.score;
+            uiElements.webcamContainer.classList.add('hidden');
+        }
+
+        function startGame() {
+            const name = uiElements.nameInput.value.trim();
+            if (!name) {
+                // Native alert forbidden by rules, using custom UI approach or just forcing input focus
+                uiElements.nameInput.focus();
+                uiElements.nameInput.classList.add('ring-2', 'ring-red-500');
+                setTimeout(() => uiElements.nameInput.classList.remove('ring-2', 'ring-red-500'), 1000);
+                return;
+            }
+            
+            gameState.playerName = name;
+            gameState.score = 0;
+            gameState.lives = 3;
+            gameState.currentQuestionIndex = 0;
+            gameState.mission = 1;
+            gameState.isRunning = true;
+            gameState.asteroids = [];
+            gameState.particles = [];
+            spaceship.x = canvas.width / 2;
+            gameState.targetX = canvas.width / 2;
+
+            uiElements.startScreen.classList.add('hidden');
+            uiElements.endScreen.classList.add('hidden');
+            uiElements.hud.classList.remove('hidden');
+            uiElements.hud.classList.add('flex');
+            
+            if (cameraActive) {
+                uiElements.webcamContainer.classList.remove('hidden');
+            }
+
+            updateUI();
+            loadQuestion();
+            gameLoop();
+        }
+
+        // --- MAIN LOOP ---
+        function gameLoop() {
+            if (!gameState.isRunning) return;
+
+            // Clear Canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Update & Draw Stars
+            gameState.stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+
+            // Update & Draw Spaceship
+            spaceship.update();
+            spaceship.draw();
+
+            // Update & Draw Asteroids
+            gameState.asteroids.forEach(ast => {
+                if(ast.active) {
+                    ast.update();
+                    ast.draw();
+                }
+            });
+
+            // Update & Draw Particles
+            for(let i=gameState.particles.length-1; i>=0; i--) {
+                const p = gameState.particles[i];
+                p.update();
+                p.draw();
+                if(p.life <= 0) gameState.particles.splice(i, 1);
+            }
+
+            // Check Collisions
+            checkCollisions();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- INPUT HANDLING ---
+        
+        // Mouse/Touch fallback
+        function updateTargetXFromEvent(clientX) {
+            gameState.targetX = clientX;
+        }
+        
+        canvas.addEventListener('mousemove', (e) => updateTargetXFromEvent(e.clientX));
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            updateTargetXFromEvent(e.touches[0].clientX);
+        }, {passive: false});
+
+        // UI Listeners
+        uiElements.startBtn.addEventListener('click', startGame);
+        uiElements.restartBtn.addEventListener('click', startGame);
+
+        // --- MEDIAPIPE HAND TRACKING INIT ---
+        let cameraActive = false;
+
+        async function initCamera() {
+            uiElements.loadingText.classList.remove('hidden');
+            try {
+                const hands = new Hands({locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }});
+                
+                hands.setOptions({
+                    maxNumHands: 1,
+                    modelComplexity: 1,
+                    minDetectionConfidence: 0.6,
+                    minTrackingConfidence: 0.6
+                });
+                
+                hands.onResults((results) => {
+                    if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                        const landmarks = results.multiHandLandmarks[0];
+                        // Get index finger tip or wrist
+                        const wrist = landmarks[0];
+                        
+                        // Mirrored logic: landmarks.x is 0-1. Since video is mirrored, left is right.
+                        // To map intuitively: moving hand left moves ship left.
+                        // Actually, raw x from mediapipe is relative to the unmirrored image.
+                        // If user moves hand to their physical right (which appears left on mirrored video), 
+                        // x value decreases. To map it to canvas properly:
+                        const normalizedX = 1 - wrist.x;
+                        gameState.targetX = normalizedX * canvas.width;
+                    }
+                });
+
+                const camera = new Camera(uiElements.videoElement, {
+                    onFrame: async () => {
+                        await hands.send({image: uiElements.videoElement});
+                    },
+                    width: 320,
+                    height: 240
+                });
+                
+                camera.start().then(() => {
+                    cameraActive = true;
+                    uiElements.loadingText.classList.add('hidden');
+                    console.log("Camera started successfully.");
+                }).catch(e => {
+                    console.warn("Camera access denied or failed. Falling back to mouse.", e);
+                    uiElements.loadingText.innerText = "Akses kamera ditolak. Gunakan Mouse/Sentuh.";
+                    uiElements.loadingText.classList.remove('animate-pulse');
+                    uiElements.loadingText.classList.add('text-red-400');
+                });
+
+            } catch (err) {
+                console.error("Error initializing MediaPipe:", err);
+                uiElements.loadingText.innerText = "Gagal memuat sensor tangan. Gunakan Mouse.";
+                uiElements.loadingText.classList.remove('animate-pulse');
+                uiElements.loadingText.classList.add('text-red-400');
+            }
+        }
+
+        // Initialize camera on load
+        window.addEventListener('load', () => {
+            initCamera();
+        });
+
+    </script>
+</body>
+</html>
